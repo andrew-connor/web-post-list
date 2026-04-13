@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Create Web Post List</title>
+  <style>
+    body {
+      font-family: Georgia, serif;
+      max-width: 700px;
+      margin: 40px auto;
+      padding: 0 20px;
+      color: #222;
+    }
+    h2 { margin-bottom: 6px; }
+    .subtitle { color: #666; font-size: 14px; margin-bottom: 20px; }
+    .token-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 14px;
+      flex-wrap: wrap;
+    }
+    label { font-size: 14px; font-weight: bold; white-space: nowrap; }
+    #apiKey {
+      width: 340px;
+      padding: 7px 10px;
+      font-size: 14px;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+    }
+    .btn-row { margin-bottom: 20px; display: flex; gap: 8px; flex-wrap: wrap; }
+    button {
+      padding: 8px 16px;
+      font-size: 14px;
+      cursor: pointer;
+      border: 1px solid #aaa;
+      border-radius: 4px;
+      background: #f5f5f5;
+    }
+    button:hover { background: #e8e8e8; }
+    button#loadBtn { background: #2c5f8a; color: white; border-color: #2c5f8a; }
+    button#loadBtn:hover { background: #224d72; }
+    hr { margin: 0 0 20px; border: none; border-top: 1px solid #ddd; }
+    #output { line-height: 1.8; }
+    #output p { margin: 0 0 1em 0; }
+    #output a { color: #2c5f8a; }
+    .status { color: #888; font-style: italic; font-family: sans-serif; font-size: 14px; }
+    .error { color: #c0392b; font-family: sans-serif; font-size: 14px; }
+  </style>
+</head>
+<body>
+
+  <h2>Create Web Post List</h2>
+  <p class="subtitle">Enter your access token, then click Create List.</p>
+
+  <div class="token-row">
+    <label for="apiKey">Access Token:</label>
+    <input id="apiKey" type="password" placeholder="Paste your token here" autocomplete="off">
+  </div>
+
+  <div class="btn-row">
+    <button id="loadBtn" onclick="loadList()">Create List</button>
+    <button onclick="copyRichText()">Copy (Rich Text)</button>
+    <button onclick="copyPlain()">Copy (Plain Text)</button>
+  </div>
+
+  <hr>
+  <div id="output"><span class="status">Enter your token above and click Create List.</span></div>
+
+  <script>
+    // ---------------------------------------------------------------
+    const BASE_ID = "appcQrKl0ISvLVH7O";
+    const TABLE   = "bfmw_form_test_table";
+    const VIEW    = "web_post_view";
+    // ---------------------------------------------------------------
+
+    function normalizeUrl(raw) {
+      if (!raw) return "";
+      let url = raw.trim().replace(/[,;'"]+$/, "");
+      if (/^https?:\/\//i.test(url)) return url;
+      if (/^\/\//i.test(url)) return "https:" + url;
+      if (/^[^@]+@[^@]+\.[^@]+$/.test(url)) return "";
+      url = url.replace(/^[/\\]+/, "");
+      return "https://" + url;
+    }
+
+    let records = [];
+
+    async function loadList() {
+      const API_KEY = document.getElementById("apiKey").value.trim();
+      if (!API_KEY) {
+        document.getElementById("output").innerHTML =
+          "<span class='error'>Please enter your access token first.</span>";
+        return;
+      }
+
+      document.getElementById("output").innerHTML =
+        "<span class='status'>Loading\u2026</span>";
+      records = [];
+      let offset = "";
+
+      try {
+        do {
+          const url = new URL(
+            `https://api.airtable.com/v0/${BASE_ID}/${encodeURIComponent(TABLE)}`
+          );
+          url.searchParams.set("view", VIEW);
+          if (offset) url.searchParams.set("offset", offset);
+
+          const res = await fetch(url, {
+            headers: { Authorization: `Bearer ${API_KEY}` }
+          });
+          const data = await res.json();
+          if (data.error) throw new Error(data.error.message);
+          records.push(...data.records);
+          offset = data.offset || "";
+        } while (offset);
+
+        renderList();
+      } catch (err) {
+        document.getElementById("output").innerHTML =
+          `<span class='error'>Error: ${err.message}. Check your token and try again.</span>`;
+      }
+    }
+
+    function renderList() {
+      if (records.length === 0) {
+        document.getElementById("output").innerHTML =
+          "<span class='status'>No results found. Make sure the web_post_view view exists and contains records.</span>";
+        return;
+      }
+
+      const sorted = [...records].sort((a, b) => {
+        const sa = (a.fields["State"] || "").toLowerCase();
+        const sb = (b.fields["State"] || "").toLowerCase();
+        if (sa !== sb) return sa.localeCompare(sb);
+        const la = (a.fields["Last name"] || "").toLowerCase();
+        const lb = (b.fields["Last name"] || "").toLowerCase();
+        return la.localeCompare(lb);
+      });
+
+      const html = sorted.map(r => {
+        const f       = r.fields;
+        const first   = (f["First name"] || "").trim();
+        const last    = (f["Last name"] || "").trim();
+        const title   = (f["Your Title (e.g., Owner, CEO)"] || "").trim();
+        const biz     = (f["Name of Business (or business organization)"] || "").trim();
+        const webpage = normalizeUrl(f["Web page"] || "");
+        const city    = (f["City"] || "").trim();
+        const state   = (f["State"] || "").trim();
+
+        const bizLink = (webpage && biz)
+          ? `<a href="${webpage}" target="_blank">${biz}</a>`
+          : biz;
+
+        const parts = [`<strong>${first} ${last}</strong>`];
+        if (title) parts.push(title);
+        if (biz)   parts.push(bizLink);
+        const line1 = parts.join(", ");
+
+        const location = [city, state].filter(Boolean).join(", ");
+        const line2 = location ? `<br>${location}` : "";
+
+        return `<p>${line1}${line2}</p>`;
+      }).join("\n");
+
+      document.getElementById("output").innerHTML = html;
+    }
+
+    async function copyRichText() {
+      const el = document.getElementById("output");
+      if (!el.innerHTML ||
+          el.innerHTML.includes("status") ||
+          el.innerHTML.includes("error")) {
+        alert("Please create the list first.");
+        return;
+      }
+      try {
+        await navigator.clipboard.write([
+          new ClipboardItem({
+            "text/html":  new Blob([el.innerHTML],  { type: "text/html" }),
+            "text/plain": new Blob([el.innerText], { type: "text/plain" })
+          })
+        ]);
+        alert("Copied as rich text! You can now paste into Word, Google Docs, or email — bold names and hyperlinks will be preserved.");
+      } catch {
+        copyPlain();
+      }
+    }
+
+    function copyPlain() {
+      const el = document.getElementById("output");
+      if (!el.innerText.trim() ||
+          el.innerText.includes("Enter your") ||
+          el.innerText.includes("Loading")) {
+        alert("Please create the list first.");
+        return;
+      }
+      navigator.clipboard.writeText(el.innerText);
+      alert("Copied as plain text.");
+    }
+  </script>
+
+</body>
+</html>
