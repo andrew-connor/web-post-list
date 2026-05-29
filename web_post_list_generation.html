@@ -134,15 +134,15 @@
         const sa = (a.fields["State"] || "").toLowerCase();
         const sb = (b.fields["State"] || "").toLowerCase();
         if (sa !== sb) return sa.localeCompare(sb);
-        const la = (a.fields["Last name"] || "").toLowerCase();
-        const lb = (b.fields["Last name"] || "").toLowerCase();
+        const la = (a.fields["Last Name"] || "").toLowerCase();
+        const lb = (b.fields["Last Name"] || "").toLowerCase();
         return la.localeCompare(lb);
       });
 
       const html = sorted.map(r => {
         const f       = r.fields;
-        const first   = (f["First name"] || "").trim();
-        const last    = (f["Last name"] || "").trim();
+        const first   = (f["First Name"] || "").trim();
+        const last    = (f["Last Name"] || "").trim();
         const title   = (f["Your Title (e.g., Owner, CEO)"] || "").trim();
         const biz     = (f["Name of Business (or business organization)"] || "").trim();
         const webpage = normalizeUrl(f["Web page"] || "");
